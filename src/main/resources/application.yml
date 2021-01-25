@@ -1,0 +1,14 @@
+bot:
+  activity: your Foreman miners
+  token: fill_me_in
+  commandPrefix: fm!
+  check:
+    initialDelay: 0
+    fixedDelay: 60000
+
+notifications:
+  max: 10
+
+foreman:
+  apiUrl: https://api.foreman.mn
+  dashboardUrl: https://dashboard.foreman.mn
