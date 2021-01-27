@@ -7,6 +7,11 @@ import java.util.concurrent.ConcurrentMap;
 /** All of the known commands. */
 public enum Command {
 
+    /** Displays the help menu. */
+    HELP(
+            "help",
+            "Displays a help menu"),
+
     /** Start bot setup. */
     START(
             "start",
@@ -20,7 +25,12 @@ public enum Command {
     /** Test bot connectivity. */
     TEST(
             "test",
-            "Tests connectivity with the Foreman API");
+            "Tests connectivity with the Foreman API"),
+
+    /** Stops the bot from notifying you. */
+    FORGET(
+            "forget",
+            "Stops the bot from notifying you");
 
     /** All of the known commands. */
     private static final ConcurrentMap<String, Command> VALUES =

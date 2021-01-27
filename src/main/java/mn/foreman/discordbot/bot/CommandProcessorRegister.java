@@ -2,25 +2,28 @@ package mn.foreman.discordbot.bot;
 
 import mn.foreman.api.ForemanApi;
 import mn.foreman.api.endpoints.ping.Ping;
-import mn.foreman.discordbot.db.ChatSession;
-import mn.foreman.discordbot.db.SessionRepository;
 
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.awt.*;
-import java.time.Instant;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /** Registers the bot for a client and API key. */
-public class CommandProcessorRegister
+public class CommandProcessorRegister<T>
         implements CommandProcessor {
 
     /** The logger for this class. */
     private static final Logger LOG =
             LoggerFactory.getLogger(CommandProcessorRegister.class);
+
+    /** Applies the client ID and api key to the session. */
+    private final ClientIdApplier<T> clientIdApplier;
 
     /** The Foreman API URL. */
     private final String foremanApiUrl;
@@ -28,36 +31,61 @@ public class CommandProcessorRegister
     /** The dashboard URL. */
     private final String foremanDashboardUrl;
 
+    /** Obtains the ID from the event. */
+    private final Function<MessageReceivedEvent, String> idSupplier;
+
+    /** Supplier for creating a new session. */
+    private final BiFunction<String, String, T> newCallback;
+
     /** The repository for sessions. */
-    private final SessionRepository sessionRepository;
+    private final MongoRepository<T, String> sessionRepository;
+
+    /** Callback for updating an existing session. */
+    private final BiFunction<T, String, T> updateCallback;
 
     /**
      * Constructor.
      *
      * @param sessionRepository   The repository.
+     * @param idSupplier          The ID supplier.
+     * @param updateCallback      The callback for updating sessions.
+     * @param newCallback         The supplier for new sessions.
+     * @param clientIdApplier     The applier for assigning client ID and api
+     *                            keys.
      * @param foremanApiUrl       The Foreman API base URL.
      * @param foremanDashboardUrl The dashboard URL.
      */
     public CommandProcessorRegister(
-            final SessionRepository sessionRepository,
+            final MongoRepository<T, String> sessionRepository,
+            final Function<MessageReceivedEvent, String> idSupplier,
+            final BiFunction<T, String, T> updateCallback,
+            final BiFunction<String, String, T> newCallback,
+            final ClientIdApplier<T> clientIdApplier,
             final String foremanApiUrl,
             final String foremanDashboardUrl) {
         this.sessionRepository = sessionRepository;
+        this.idSupplier = idSupplier;
+        this.updateCallback = updateCallback;
+        this.newCallback = newCallback;
+        this.clientIdApplier = clientIdApplier;
         this.foremanApiUrl = foremanApiUrl;
         this.foremanDashboardUrl = foremanDashboardUrl;
     }
 
     @Override
     public void process(final MessageReceivedEvent event) {
-        final String guildId = event.getGuild().getId();
+        final String id = this.idSupplier.apply(event);
         final MessageChannel messageChannel = event.getChannel();
         final String messageChannelId = messageChannel.getId();
         final Message message = event.getMessage();
 
-        final ChatSession chatSession =
-                this.sessionRepository.findById(guildId)
-                        .map(session -> updateSession(session, messageChannelId))
-                        .orElseGet(() -> newSession(messageChannelId, guildId));
+        final T session =
+                this.sessionRepository.findById(id)
+                        .map(t -> this.updateCallback.apply(t, messageChannelId))
+                        .orElseGet(() ->
+                                this.newCallback.apply(
+                                        messageChannelId,
+                                        id));
 
         final String[] split =
                 message
@@ -81,7 +109,7 @@ public class CommandProcessorRegister
                     handleSuccess(
                             clientId,
                             apiKey,
-                            chatSession,
+                            session,
                             messageChannel);
                 } else {
                     MessageUtils.sendSimple(
@@ -112,12 +140,12 @@ public class CommandProcessorRegister
     private void handleSuccess(
             final int clientId,
             final String apiKey,
-            final ChatSession chatSession,
+            final T chatSession,
             final MessageChannel messageChannel) {
-        chatSession.setClientId(clientId);
-        chatSession.setApiKey(apiKey);
-        chatSession.setDateRegistered(Instant.now());
-        this.sessionRepository.save(chatSession);
+        this.clientIdApplier.apply(
+                chatSession,
+                clientId,
+                apiKey);
 
         MessageUtils.sendSimple(
                 "Those look correct! Setup complete! :white_check_mark:\n" +
@@ -131,39 +159,20 @@ public class CommandProcessorRegister
                 messageChannel);
     }
 
-    /**
-     * First time this guild has been seen - new session.
-     *
-     * @param channelId The channel.
-     * @param guildId   The guild.
-     *
-     * @return The new session.
-     */
-    private ChatSession newSession(
-            final String channelId,
-            final String guildId) {
-        return this.sessionRepository.insert(
-                ChatSession
-                        .builder()
-                        .guildId(guildId)
-                        .channelId(channelId)
-                        .build());
-    }
+    /** Applies the client ID and api key to the session. */
+    @FunctionalInterface
+    public interface ClientIdApplier<T> {
 
-    /**
-     * Register was ran in a new channel. Update the session so notifications go
-     * here instead.
-     *
-     * @param session   The session.
-     * @param channelId The new channel.
-     *
-     * @return The session.
-     */
-    private ChatSession updateSession(
-            final ChatSession session,
-            final String channelId) {
-        session.setChannelId(channelId);
-        this.sessionRepository.save(session);
-        return session;
+        /**
+         * Applies the client ID and api key to the session.
+         *
+         * @param session  The session.
+         * @param clientId The ID.
+         * @param apiKey   The api key.
+         */
+        void apply(
+                T session,
+                int clientId,
+                String apiKey);
     }
 }

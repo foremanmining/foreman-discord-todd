@@ -4,32 +4,29 @@ import mn.foreman.api.ForemanApi;
 import mn.foreman.api.ForemanApiImpl;
 import mn.foreman.api.JdkWebUtil;
 import mn.foreman.api.endpoints.notifications.Notifications;
-import mn.foreman.discordbot.db.ChatSession;
-import mn.foreman.discordbot.db.SessionRepository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Iterables;
 import lombok.Builder;
 import lombok.Data;
-import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.entities.MessageChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
+import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.awt.*;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * A simple {@link NotificationsProcessor} implementation that sends
  * markdown-formatted messages to the provided chat based on the session that's
  * to be notified.
  */
-@Component
-public class NotificationsProcessorImpl
-        implements NotificationsProcessor {
+public class NotificationsProcessorImpl<T>
+        implements NotificationsProcessor<T> {
 
     /** The logger for this class. */
     private static final Logger LOG =
@@ -41,17 +38,20 @@ public class NotificationsProcessorImpl
     /** The base URL for Foreman. */
     private final String foremanDashboardUrl;
 
-    /** The Discord API. */
-    private final JDA jda;
+    /** The setter for the last notification ID. */
+    private final BiConsumer<T, Integer> lastNotificationSetter;
 
     /** The max notifications to send at once. */
     private final int maxNotifications;
+
+    /** The message channel supplier. */
+    private final Function<T, MessageChannel> messageChannelSupplier;
 
     /** The mapper. */
     private final ObjectMapper objectMapper;
 
     /** The session repository. */
-    private final SessionRepository sessionRepository;
+    private final MongoRepository<T, String> sessionRepository;
 
     /** The bot start time. */
     private final Instant startTime;
@@ -59,24 +59,27 @@ public class NotificationsProcessorImpl
     /**
      * Constructor.
      *
-     * @param sessionRepository   The session repository.
-     * @param jda                 The Discord API.
-     * @param objectMapper        The mapper.
-     * @param startTime           The start time.
-     * @param maxNotifications    The max notifications to send at once.
-     * @param foremanApiUrl       The API URL.
-     * @param foremanDashboardUrl The Foreman dashboard URL.
+     * @param sessionRepository      The session repository.
+     * @param messageChannelSupplier The channel supplier.
+     * @param lastNotificationSetter The last notification ID setter.
+     * @param objectMapper           The mapper.
+     * @param startTime              The start time.
+     * @param maxNotifications       The max notifications to send at once.
+     * @param foremanApiUrl          The API URL.
+     * @param foremanDashboardUrl    The Foreman dashboard URL.
      */
     public NotificationsProcessorImpl(
-            final SessionRepository sessionRepository,
-            final JDA jda,
+            final MongoRepository<T, String> sessionRepository,
+            final Function<T, MessageChannel> messageChannelSupplier,
+            final BiConsumer<T, Integer> lastNotificationSetter,
             final ObjectMapper objectMapper,
             final Instant startTime,
-            @Value("${notifications.max}") final int maxNotifications,
-            @Value("${foreman.apiUrl}") final String foremanApiUrl,
-            @Value("${foreman.dashboardUrl}") final String foremanDashboardUrl) {
+            final int maxNotifications,
+            final String foremanApiUrl,
+            final String foremanDashboardUrl) {
         this.sessionRepository = sessionRepository;
-        this.jda = jda;
+        this.messageChannelSupplier = messageChannelSupplier;
+        this.lastNotificationSetter = lastNotificationSetter;
         this.objectMapper = objectMapper;
         this.startTime = startTime;
         this.maxNotifications = maxNotifications;
@@ -86,47 +89,57 @@ public class NotificationsProcessorImpl
 
     @Override
     public void process(
-            final ChatSession chatSession) {
+            final int id,
+            final String apiKey,
+            final Instant dateRegistered,
+            final int lastNotificationId,
+            final T session) {
         final ForemanApi foremanApi =
                 new ForemanApiImpl(
-                        Integer.toString(chatSession.getClientId()),
+                        Integer.toString(id),
                         "",
                         this.objectMapper,
                         new JdkWebUtil(
                                 this.foremanApiUrl,
-                                chatSession.getApiKey()));
+                                apiKey));
 
         final Notifications notificationsApi =
                 foremanApi.notifications();
 
-        final Instant registered = chatSession.getDateRegistered();
-
         final List<Notifications.Notification> notifications =
                 notificationsApi.discord(
-                        chatSession.getLastNotificationId(),
-                        registered.isAfter(this.startTime)
-                                ? registered
+                        lastNotificationId,
+                        dateRegistered.isAfter(this.startTime)
+                                ? dateRegistered
                                 : this.startTime);
 
         LOG.info("Session {} has {} pending notifications",
-                chatSession,
+                session,
                 notifications);
         if (!notifications.isEmpty()) {
             notifications
                     .stream()
                     .map(this::toNotificationMessage)
-                    .forEach(message ->
+                    .forEach(message -> {
+                        final MessageChannel messageChannel =
+                                this.messageChannelSupplier.apply(session);
+                        if (message != null) {
                             MessageUtils.sendSimple(
                                     message.getMessage(),
                                     message.isError()
                                             ? Color.RED
                                             : Color.GREEN,
-                                    Objects.requireNonNull(jda.getTextChannelById(chatSession.getChannelId()))));
+                                    messageChannel);
+                        } else {
+                            LOG.warn("Text channel doesn't exist anymore - forgetting session");
+                            this.sessionRepository.delete(session);
+                        }
+                    });
 
             final Notifications.Notification lastNotification =
                     Iterables.getLast(notifications);
-            chatSession.setLastNotificationId(lastNotification.id);
-            this.sessionRepository.save(chatSession);
+            this.lastNotificationSetter.accept(session, lastNotification.id);
+            this.sessionRepository.save(session);
         }
     }
 

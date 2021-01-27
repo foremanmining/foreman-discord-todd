@@ -2,24 +2,27 @@ package mn.foreman.discordbot.bot;
 
 import mn.foreman.api.ForemanApi;
 import mn.foreman.api.endpoints.ping.Ping;
-import mn.foreman.discordbot.db.ChatSession;
-import mn.foreman.discordbot.db.SessionRepository;
 
 import net.dv8tion.jda.api.entities.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.awt.*;
 import java.util.Optional;
+import java.util.function.Function;
 
 /** Tests connectivity to the Foreman API. */
-public class CommandProcessorTest
+public class CommandProcessorTest<T>
         implements CommandProcessor {
 
-    /** The Foreman base URL. */
-    private final String foremanApiUrl;
+    /** The supplier for API handlers. */
+    private final Function<T, ForemanApi> apiSupplier;
+
+    /** Obtains the ID from the event. */
+    private final Function<MessageReceivedEvent, String> idSupplier;
 
     /** The session repository. */
-    private final SessionRepository sessionRepository;
+    private final MongoRepository<T, String> sessionRepository;
 
     /** The start processor. */
     private final CommandProcessor startProcessor;
@@ -28,31 +31,33 @@ public class CommandProcessorTest
      * Constructor.
      *
      * @param sessionRepository The session repository.
+     * @param idSupplier        The supplier for IDs.
+     * @param apiSupplier       The supplier for new API handlers.
      * @param startProcessor    The start processor.
-     * @param foremanApiUrl     The Foreman API base URL.
      */
     public CommandProcessorTest(
-            final SessionRepository sessionRepository,
-            final CommandProcessor startProcessor,
-            final String foremanApiUrl) {
+            final MongoRepository<T, String> sessionRepository,
+            final Function<MessageReceivedEvent, String> idSupplier,
+            final Function<T, ForemanApi> apiSupplier,
+            final CommandProcessor startProcessor) {
         this.sessionRepository = sessionRepository;
+        this.idSupplier = idSupplier;
+        this.apiSupplier = apiSupplier;
         this.startProcessor = startProcessor;
-        this.foremanApiUrl = foremanApiUrl;
     }
 
     @Override
     public void process(final MessageReceivedEvent event) {
         final MessageChannel messageChannel = event.getChannel();
-        final String guildId = event.getGuild().getId();
 
-        final Optional<ChatSession> chatSessionOpt =
-                this.sessionRepository.findById(guildId);
-        if (chatSessionOpt.isPresent()) {
-            final ChatSession chatSession = chatSessionOpt.get();
+        final String id = this.idSupplier.apply(event);
+
+        final Optional<T> sessionOpt =
+                this.sessionRepository.findById(id);
+        if (sessionOpt.isPresent()) {
+            final T session = sessionOpt.get();
             final ForemanApi foremanApi =
-                    ForemanUtils.toApi(
-                            chatSession,
-                            this.foremanApiUrl);
+                    this.apiSupplier.apply(session);
             final Ping ping = foremanApi.ping();
 
             MessageUtils.sendSimple(

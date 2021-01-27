@@ -1,6 +1,7 @@
 package mn.foreman.discordbot.bot;
 
 import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.ChannelType;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.User;
@@ -48,28 +49,12 @@ public class MessageListener
     public void onMessageReceived(final @NotNull MessageReceivedEvent event) {
         final User author = event.getAuthor();
         if (!author.isBot()) {
-            final Member member = event.getMember();
-            if (isPermitted(member)) {
-                final Message message = event.getMessage();
-                final String text = message.getContentRaw();
-                final Optional<Command> commandOptional =
-                        Command.forText(
-                                this.commandPrefix,
-                                text);
-                if (commandOptional.isPresent()) {
-                    final Command command = commandOptional.get();
-                    LOG.info("Running command {} from {}",
-                            command,
-                            event);
-                    this.commandProcessors.getOrDefault(
-                            command,
-                            new CommandProcessorNull())
-                            .process(event);
-                } else {
-                    LOG.info("Received a non-command: {}", message);
-                }
+            if (event.isFromType(ChannelType.PRIVATE)) {
+                processPrivate(event);
             } else {
-                LOG.info("Received message from non-permitted user: {}", author);
+                processPublic(
+                        author,
+                        event);
             }
         } else {
             LOG.info("Dropping message from bot {}", author);
@@ -86,5 +71,41 @@ public class MessageListener
     private static boolean isPermitted(final Member member) {
         return (member != null &&
                 member.hasPermission(Permission.MANAGE_SERVER));
+    }
+
+    private void processMessage(final MessageReceivedEvent event) {
+        final Message message = event.getMessage();
+        final String text = message.getContentRaw();
+        final Optional<Command> commandOptional =
+                Command.forText(
+                        this.commandPrefix,
+                        text);
+        if (commandOptional.isPresent()) {
+            final Command command = commandOptional.get();
+            LOG.info("Running command {} from {}",
+                    command,
+                    event);
+            this.commandProcessors.getOrDefault(
+                    command,
+                    new CommandProcessorNull())
+                    .process(event);
+        } else {
+            LOG.info("Received a non-command: {}", message);
+        }
+    }
+
+    private void processPrivate(final MessageReceivedEvent event) {
+        processMessage(event);
+    }
+
+    private void processPublic(
+            final User author,
+            final MessageReceivedEvent event) {
+        final Member member = event.getMember();
+        if (isPermitted(member)) {
+            processMessage(event);
+        } else {
+            LOG.info("Received message from non-permitted user: {}", author);
+        }
     }
 }

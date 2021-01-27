@@ -5,12 +5,10 @@ import mn.foreman.discordbot.db.SessionRepository;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /** The Foreman Discord bot. */
 @SpringBootApplication
 @EnableMongoRepositories(basePackageClasses = SessionRepository.class)
-@EnableScheduling
 public class DiscordBotApplication {
 
     /**
