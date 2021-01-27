@@ -11,7 +11,7 @@
     </parent>
     <groupId>mn.foreman</groupId>
     <artifactId>discord-bot</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>discord-bot</name>
     <description>The Foreman Discord bot</description>
 
