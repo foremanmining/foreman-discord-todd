@@ -9,16 +9,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Iterables;
 import lombok.Builder;
 import lombok.Data;
-import net.dv8tion.jda.api.entities.MessageChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
-import java.awt.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 
 /**
  * A simple {@link NotificationsProcessor} implementation that sends
@@ -44,11 +41,11 @@ public class NotificationsProcessorImpl<T>
     /** The max notifications to send at once. */
     private final int maxNotifications;
 
-    /** The message channel supplier. */
-    private final Function<T, MessageChannel> messageChannelSupplier;
-
     /** The mapper. */
     private final ObjectMapper objectMapper;
+
+    /** The message channel supplier. */
+    private final BiConsumer<DiscordNotification, T> sender;
 
     /** The session repository. */
     private final MongoRepository<T, String> sessionRepository;
@@ -60,7 +57,7 @@ public class NotificationsProcessorImpl<T>
      * Constructor.
      *
      * @param sessionRepository      The session repository.
-     * @param messageChannelSupplier The channel supplier.
+     * @param sender                 The sender callback.
      * @param lastNotificationSetter The last notification ID setter.
      * @param objectMapper           The mapper.
      * @param startTime              The start time.
@@ -70,7 +67,7 @@ public class NotificationsProcessorImpl<T>
      */
     public NotificationsProcessorImpl(
             final MongoRepository<T, String> sessionRepository,
-            final Function<T, MessageChannel> messageChannelSupplier,
+            final BiConsumer<DiscordNotification, T> sender,
             final BiConsumer<T, Integer> lastNotificationSetter,
             final ObjectMapper objectMapper,
             final Instant startTime,
@@ -78,7 +75,7 @@ public class NotificationsProcessorImpl<T>
             final String foremanApiUrl,
             final String foremanDashboardUrl) {
         this.sessionRepository = sessionRepository;
-        this.messageChannelSupplier = messageChannelSupplier;
+        this.sender = sender;
         this.lastNotificationSetter = lastNotificationSetter;
         this.objectMapper = objectMapper;
         this.startTime = startTime;
@@ -120,21 +117,10 @@ public class NotificationsProcessorImpl<T>
             notifications
                     .stream()
                     .map(this::toNotificationMessage)
-                    .forEach(message -> {
-                        final MessageChannel messageChannel =
-                                this.messageChannelSupplier.apply(session);
-                        if (message != null) {
-                            MessageUtils.sendSimple(
-                                    message.getMessage(),
-                                    message.isError()
-                                            ? Color.RED
-                                            : Color.GREEN,
-                                    messageChannel);
-                        } else {
-                            LOG.warn("Text channel doesn't exist anymore - forgetting session");
-                            this.sessionRepository.delete(session);
-                        }
-                    });
+                    .forEach(message ->
+                            this.sender.accept(
+                                    message,
+                                    session));
 
             final Notifications.Notification lastNotification =
                     Iterables.getLast(notifications);
@@ -229,7 +215,7 @@ public class NotificationsProcessorImpl<T>
     /** A wrapper around the message to send and whether or not it's an error. */
     @Data
     @Builder
-    private static class DiscordNotification {
+    public static class DiscordNotification {
 
         /** Whether or not the notification represents an error. */
         private final boolean error;

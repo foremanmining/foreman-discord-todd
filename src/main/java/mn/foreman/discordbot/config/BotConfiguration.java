@@ -11,7 +11,10 @@ import com.google.common.collect.ImmutableMap;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
+import net.dv8tion.jda.api.entities.MessageChannel;
 import net.dv8tion.jda.api.entities.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -19,6 +22,7 @@ import org.springframework.context.annotation.Configuration;
 
 import javax.annotation.PostConstruct;
 import javax.security.auth.login.LoginException;
+import java.awt.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +33,10 @@ import java.util.concurrent.TimeUnit;
 /** Bot bean configuration. */
 @Configuration
 public class BotConfiguration {
+
+    /** The logger for this class. */
+    private static final Logger LOG =
+            LoggerFactory.getLogger(BotConfiguration.class);
 
     /** The notifier fixed deplay. */
     @Value("${bot.check.fixedDelay}")
@@ -71,7 +79,22 @@ public class BotConfiguration {
         final NotificationsProcessor<ChatSession> notificationsProcessor =
                 new NotificationsProcessorImpl<>(
                         sessionRepository,
-                        chatSession -> jda.getTextChannelById(chatSession.getChannelId()),
+                        (notification, session) -> {
+                            final MessageChannel messageChannel =
+                                    jda.getTextChannelById(session.getChannelId());
+                            if (messageChannel != null) {
+                                MessageUtils.sendSimple(
+                                        notification.getMessage(),
+                                        notification.isError()
+                                                ? Color.RED
+                                                : Color.GREEN,
+                                        messageChannel);
+                            } else {
+                                LOG.warn("Failed to obtain channel for {}",
+                                        session);
+                                sessionRepository.delete(session);
+                            }
+                        },
                         ChatSession::setLastNotificationId,
                         objectMapper,
                         startTime,
@@ -305,12 +328,18 @@ public class BotConfiguration {
         final NotificationsProcessor<PrivateSession> notificationsProcessor =
                 new NotificationsProcessorImpl<>(
                         sessionRepository,
-                        session -> {
+                        (notification, session) -> {
                             final User user = jda.getUserById(session.getAuthorId());
                             if (user != null) {
-                                return user.openPrivateChannel().complete();
+                                user.openPrivateChannel().queue(
+                                        privateChannel ->
+                                                MessageUtils.sendSimple(
+                                                        notification.getMessage(),
+                                                        notification.isError()
+                                                                ? Color.RED
+                                                                : Color.GREEN,
+                                                        privateChannel));
                             }
-                            return null;
                         },
                         PrivateSession::setLastNotificationId,
                         objectMapper,
