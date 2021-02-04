@@ -6,8 +6,6 @@ import mn.foreman.api.endpoints.pickaxe.Pickaxe;
 
 import net.dv8tion.jda.api.entities.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.awt.*;
@@ -22,10 +20,6 @@ import java.util.stream.Collectors;
 /** Gets the status of all of the miners in Foreman. */
 public class CommandProcessorStatus<T>
         implements CommandProcessor {
-
-    /** The logger for this class. */
-    private static final Logger LOG =
-            LoggerFactory.getLogger(CommandProcessorStatus.class);
 
     /** The supplier for creating new API handlers. */
     private final BiFunction<T, String, ForemanApi> apiSupplier;
@@ -79,20 +73,25 @@ public class CommandProcessorStatus<T>
                             .map(pickaxe -> getMiners(session, pickaxe))
                             .flatMap(List::stream)
                             .filter(miner -> !miner.status.equals("okay"))
+                            .filter(miner -> miner.seen)
+                            .filter(miner -> miner.active)
                             .collect(Collectors.groupingBy(miner -> miner.status));
             if (!troubleMiners.isEmpty()) {
                 final List<Miners.Miner> failingMiners =
                         troubleMiners.getOrDefault(
                                 "fail",
                                 Collections.emptyList());
-                String discordMessage =
-                        toMessage(failingMiners);
-                discordMessage +=
-                        toMessage(
-                                troubleMiners.getOrDefault(
-                                        "warn",
-                                        Collections.emptyList()));
-
+                final List<Miners.Miner> warningMiners =
+                        troubleMiners.getOrDefault(
+                                "warn",
+                                Collections.emptyList());
+                String discordMessage = "**Miners Unhealthy**\n\n";
+                if (!warningMiners.isEmpty()) {
+                    discordMessage += toMessage("Warn", warningMiners);
+                }
+                if (!failingMiners.isEmpty()) {
+                    discordMessage += toMessage("Fail", failingMiners);
+                }
                 MessageUtils.sendSimple(
                         discordMessage,
                         failingMiners.isEmpty()
@@ -101,7 +100,7 @@ public class CommandProcessorStatus<T>
                         messageChannel);
             } else {
                 MessageUtils.sendSimple(
-                        "Everything looks okay!",
+                        "**Miners Healthy!**",
                         Color.GREEN,
                         messageChannel);
             }
@@ -134,12 +133,25 @@ public class CommandProcessorStatus<T>
     /**
      * Creates a string containing the message.
      *
-     * @param failingMiners The failing miners.
+     * @param status Miner status (warn or fail).
+     * @param miners The failing miners.
      *
      * @return The message.
      */
-    private String toMessage(final List<Miners.Miner> failingMiners) {
-        return "";
+    private String toMessage(
+            final String status,
+            final List<Miners.Miner> miners) {
+        final StringBuilder message =
+                new StringBuilder("**" + status + "**:\n");
+        for (int i = 0; i < miners.size(); i++) {
+            final Miners.Miner miner = miners.get(i);
+            message
+                    .append(toMinerUrl(miner))
+                    .append("\n");
+        }
+        return message
+                .append("\n")
+                .toString();
     }
 
     /**
