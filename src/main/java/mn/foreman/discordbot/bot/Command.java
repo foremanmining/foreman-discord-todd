@@ -30,7 +30,12 @@ public enum Command {
     /** Stops the bot from notifying you. */
     FORGET(
             "forget",
-            "Stops the bot from notifying you");
+            "Stops the bot from notifying you"),
+
+    /** The status command. */
+    STATUS(
+            "status",
+            "Displays the current non-okay status for each miner in Foreman");
 
     /** All of the known commands. */
     private static final ConcurrentMap<String, Command> VALUES =

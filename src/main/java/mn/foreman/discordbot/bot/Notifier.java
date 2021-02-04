@@ -45,12 +45,16 @@ public class Notifier<T> {
      * monitors and sends messages to users, as necessary.
      */
     public void fetchAndNotify() {
-        final List<T> sessions =
-                this.sessionRepository.findAll();
-        LOG.info("Looking for notifications for {} sessions", sessions.size());
-        sessions
-                .parallelStream()
-                .filter(this.filter)
-                .forEach(this.notificationsProcessor);
+        try {
+            final List<T> sessions =
+                    this.sessionRepository.findAll();
+            LOG.info("Looking for notifications for {} sessions", sessions.size());
+            sessions
+                    .parallelStream()
+                    .filter(this.filter)
+                    .forEach(this.notificationsProcessor);
+        } catch (final Exception e) {
+            LOG.warn("Exception occurred while processing notifications", e);
+        }
     }
 }

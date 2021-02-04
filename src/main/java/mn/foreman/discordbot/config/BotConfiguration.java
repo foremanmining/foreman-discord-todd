@@ -1,5 +1,7 @@
 package mn.foreman.discordbot.config;
 
+import mn.foreman.api.ForemanApiImpl;
+import mn.foreman.api.JdkWebUtil;
 import mn.foreman.discordbot.bot.*;
 import mn.foreman.discordbot.db.ChatSession;
 import mn.foreman.discordbot.db.PrivateSession;
@@ -121,6 +123,7 @@ public class BotConfiguration {
      * @param foremanApiUrl       The Foreman API URL.
      * @param foremanDashboardUrl The Foreman dashboard URL.
      * @param sessionRepository   The session repository.
+     * @param objectMapper        The mapper.
      *
      * @return The processors.
      */
@@ -130,7 +133,8 @@ public class BotConfiguration {
             @Value("${foreman.apiUrl}") final String foremanApiUrl,
             @Value("${foreman.dashboardUrl}") final String foremanDashboardUrl,
             final SessionRepository sessionRepository,
-            final PrivateSessionRepository privateSessionRepository) {
+            final PrivateSessionRepository privateSessionRepository,
+            final ObjectMapper objectMapper) {
         final CommandProcessor startProcessor =
                 new CommandProcessorStart(
                         commandPrefix,
@@ -220,6 +224,33 @@ public class BotConfiguration {
                                                         session.getApiKey(),
                                                         foremanApiUrl),
                                         startProcessor)))
+                .put(
+                        Command.STATUS,
+                        new EventRouter(
+                                new CommandProcessorStatus<>(
+                                        sessionRepository,
+                                        event -> event.getGuild().getId(),
+                                        (session, pickaxe) ->
+                                                new ForemanApiImpl(
+                                                        Integer.toString(session.getClientId()),
+                                                        pickaxe,
+                                                        objectMapper,
+                                                        new JdkWebUtil(
+                                                                foremanApiUrl,
+                                                                session.getApiKey())),
+                                        foremanDashboardUrl),
+                                new CommandProcessorStatus<>(
+                                        privateSessionRepository,
+                                        event -> event.getAuthor().getId(),
+                                        (session, pickaxe) ->
+                                                new ForemanApiImpl(
+                                                        Integer.toString(session.getClientId()),
+                                                        pickaxe,
+                                                        objectMapper,
+                                                        new JdkWebUtil(
+                                                                foremanApiUrl,
+                                                                session.getApiKey())),
+                                        foremanDashboardUrl)))
                 .build();
     }
 
@@ -294,11 +325,11 @@ public class BotConfiguration {
     /** Starts the notifiers. */
     @PostConstruct
     public void post() {
-        for (final Notifier<?> notifier : notifiers) {
-            scheduledExecutorService.scheduleAtFixedRate(
+        for (final Notifier<?> notifier : this.notifiers) {
+            this.scheduledExecutorService.scheduleAtFixedRate(
                     notifier::fetchAndNotify,
-                    initialDelay,
-                    fixedDelay,
+                    this.initialDelay,
+                    this.fixedDelay,
                     TimeUnit.MILLISECONDS);
         }
     }
