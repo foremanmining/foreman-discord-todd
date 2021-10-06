@@ -117,7 +117,7 @@ public class NotificationsProcessorImpl<T>
                 session,
                 notifications);
         if (!notifications.isEmpty()) {
-            LOG.debug("Building notification message for {}", session);
+            LOG.info("Building notification message for {}", session);
             notifications
                     .stream()
                     .map(this::toNotificationMessage)

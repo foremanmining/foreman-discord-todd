@@ -374,6 +374,8 @@ public class BotConfiguration {
                                                                 ? Color.RED
                                                                 : Color.GREEN,
                                                         privateChannel));
+                            } else {
+                                LOG.warn("User doesn't exist for {}", session);
                             }
                         },
                         PrivateSession::setLastNotificationId,
