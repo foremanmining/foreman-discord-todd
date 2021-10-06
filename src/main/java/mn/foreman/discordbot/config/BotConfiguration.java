@@ -237,7 +237,9 @@ public class BotConfiguration {
                                                         objectMapper,
                                                         new JdkWebUtil(
                                                                 foremanApiUrl,
-                                                                session.getApiKey())),
+                                                                session.getApiKey(),
+                                                                5,
+                                                                TimeUnit.SECONDS)),
                                         foremanDashboardUrl),
                                 new CommandProcessorStatus<>(
                                         privateSessionRepository,
@@ -249,7 +251,9 @@ public class BotConfiguration {
                                                         objectMapper,
                                                         new JdkWebUtil(
                                                                 foremanApiUrl,
-                                                                session.getApiKey())),
+                                                                session.getApiKey(),
+                                                                5,
+                                                                TimeUnit.SECONDS)),
                                         foremanDashboardUrl)))
                 .build();
     }

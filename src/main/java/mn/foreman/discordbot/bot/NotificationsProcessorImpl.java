@@ -15,6 +15,7 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 /**
@@ -98,7 +99,9 @@ public class NotificationsProcessorImpl<T>
                         this.objectMapper,
                         new JdkWebUtil(
                                 this.foremanApiUrl,
-                                apiKey));
+                                apiKey,
+                                5,
+                                TimeUnit.SECONDS));
 
         final Notifications notificationsApi =
                 foremanApi.notifications();
@@ -114,6 +117,7 @@ public class NotificationsProcessorImpl<T>
                 session,
                 notifications);
         if (!notifications.isEmpty()) {
+            LOG.debug("Building notification message for {}", session);
             notifications
                     .stream()
                     .map(this::toNotificationMessage)

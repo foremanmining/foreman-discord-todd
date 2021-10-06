@@ -35,7 +35,7 @@
 
     <properties>
         <emoji.version>5.1.1</emoji.version>
-        <foreman.version>1.2.0-SNAPSHOT</foreman.version>
+        <foreman.version>1.8.0</foreman.version>
         <jib.version>1.8.0</jib.version>
         <lombok.version>1.18.16</lombok.version>
 

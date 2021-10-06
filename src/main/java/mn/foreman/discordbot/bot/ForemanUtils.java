@@ -7,6 +7,8 @@ import mn.foreman.discordbot.db.ChatSession;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.util.concurrent.TimeUnit;
+
 /** Utilities for interacting with the Foreman API. */
 public class ForemanUtils {
 
@@ -29,7 +31,9 @@ public class ForemanUtils {
                 new ObjectMapper(),
                 new JdkWebUtil(
                         foremanBaseUrl,
-                        apiKey));
+                        apiKey,
+                        5,
+                        TimeUnit.SECONDS));
     }
 
     /**
