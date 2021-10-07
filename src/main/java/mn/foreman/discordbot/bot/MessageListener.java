@@ -82,8 +82,9 @@ public class MessageListener
                         text);
         if (commandOptional.isPresent()) {
             final Command command = commandOptional.get();
-            LOG.info("Running command {} from {}",
+            LOG.info("Running command {} from {}:{}",
                     command,
+                    event.getAuthor().getId(),
                     event);
             this.commandProcessors.getOrDefault(
                     command,

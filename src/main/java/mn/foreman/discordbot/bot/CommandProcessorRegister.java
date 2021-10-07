@@ -35,13 +35,13 @@ public class CommandProcessorRegister<T>
     private final Function<MessageReceivedEvent, String> idSupplier;
 
     /** Supplier for creating a new session. */
-    private final BiFunction<String, String, T> newCallback;
+    private final Function<MessageReceivedEvent, T> newCallback;
 
     /** The repository for sessions. */
     private final MongoRepository<T, String> sessionRepository;
 
     /** Callback for updating an existing session. */
-    private final BiFunction<T, String, T> updateCallback;
+    private final BiFunction<T, MessageReceivedEvent, T> updateCallback;
 
     /**
      * Constructor.
@@ -58,8 +58,8 @@ public class CommandProcessorRegister<T>
     public CommandProcessorRegister(
             final MongoRepository<T, String> sessionRepository,
             final Function<MessageReceivedEvent, String> idSupplier,
-            final BiFunction<T, String, T> updateCallback,
-            final BiFunction<String, String, T> newCallback,
+            final BiFunction<T, MessageReceivedEvent, T> updateCallback,
+            final Function<MessageReceivedEvent, T> newCallback,
             final ClientIdApplier<T> clientIdApplier,
             final String foremanApiUrl,
             final String foremanDashboardUrl) {
@@ -76,16 +76,12 @@ public class CommandProcessorRegister<T>
     public void process(final MessageReceivedEvent event) {
         final String id = this.idSupplier.apply(event);
         final MessageChannel messageChannel = event.getChannel();
-        final String messageChannelId = messageChannel.getId();
         final Message message = event.getMessage();
 
         final T session =
                 this.sessionRepository.findById(id)
-                        .map(t -> this.updateCallback.apply(t, messageChannelId))
-                        .orElseGet(() ->
-                                this.newCallback.apply(
-                                        messageChannelId,
-                                        id));
+                        .map(t -> this.updateCallback.apply(t, event))
+                        .orElseGet(() -> this.newCallback.apply(event));
 
         final String[] split =
                 message

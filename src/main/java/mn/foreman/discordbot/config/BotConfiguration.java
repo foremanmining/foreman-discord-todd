@@ -14,7 +14,6 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.MessageChannel;
-import net.dv8tion.jda.api.entities.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -161,17 +160,17 @@ public class BotConfiguration {
                                 new CommandProcessorRegister<>(
                                         sessionRepository,
                                         event -> event.getGuild().getId(),
-                                        (session, id) -> {
-                                            session.setChannelId(id);
+                                        (session, event) -> {
+                                            session.setChannelId(event.getGuild().getId());
                                             sessionRepository.save(session);
                                             return session;
                                         },
-                                        (channelId, id) ->
+                                        (event) ->
                                                 sessionRepository.insert(
                                                         ChatSession
                                                                 .builder()
-                                                                .guildId(id)
-                                                                .channelId(channelId)
+                                                                .guildId(event.getGuild().getId())
+                                                                .channelId(event.getChannel().getId())
                                                                 .build()),
                                         (session, clientId, apiKey) -> {
                                             session.setClientId(clientId);
@@ -184,16 +183,16 @@ public class BotConfiguration {
                                 new CommandProcessorRegister<>(
                                         privateSessionRepository,
                                         event -> event.getAuthor().getId(),
-                                        (session, id) -> {
-                                            session.setAuthorId(id);
+                                        (session, event) -> {
+                                            session.setAuthorId(event.getAuthor().getId());
                                             privateSessionRepository.save(session);
                                             return session;
                                         },
-                                        (channelId, id) ->
+                                        (event) ->
                                                 privateSessionRepository.insert(
                                                         PrivateSession
                                                                 .builder()
-                                                                .authorId(id)
+                                                                .authorId(event.getAuthor().getId())
                                                                 .build()),
                                         (session, clientId, apiKey) -> {
                                             session.setClientId(clientId);
@@ -363,21 +362,24 @@ public class BotConfiguration {
         final NotificationsProcessor<PrivateSession> notificationsProcessor =
                 new NotificationsProcessorImpl<>(
                         sessionRepository,
-                        (notification, session) -> {
-                            final User user = jda.getUserById(session.getAuthorId());
-                            if (user != null) {
-                                user.openPrivateChannel().queue(
-                                        privateChannel ->
-                                                MessageUtils.sendSimple(
-                                                        notification.getMessage(),
-                                                        notification.isError()
-                                                                ? Color.RED
-                                                                : Color.GREEN,
-                                                        privateChannel));
-                            } else {
-                                LOG.warn("User doesn't exist for {}", session);
-                            }
-                        },
+                        (notification, session) ->
+                                jda
+                                        .retrieveUserById(session.getAuthorId())
+                                        .queue(user -> {
+                                            if (user != null) {
+                                                user.openPrivateChannel().queue(
+                                                        privateChannel ->
+                                                                MessageUtils.sendSimple(
+                                                                        notification.getMessage(),
+                                                                        notification.isError()
+                                                                                ? Color.RED
+                                                                                : Color.GREEN,
+                                                                        privateChannel));
+                                            } else {
+                                                LOG.warn("User doesn't exist for {}", session);
+                                                sessionRepository.delete(session);
+                                            }
+                                        }),
                         PrivateSession::setLastNotificationId,
                         objectMapper,
                         startTime,

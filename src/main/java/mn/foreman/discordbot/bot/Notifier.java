@@ -52,7 +52,13 @@ public class Notifier<T> {
             sessions
                     .parallelStream()
                     .filter(this.filter)
-                    .forEach(this.notificationsProcessor);
+                    .forEach(t -> {
+                        try {
+                            this.notificationsProcessor.accept(t);
+                        } catch (final Exception e) {
+                            LOG.warn("Exception occurred", e);
+                        }
+                    });
         } catch (final Exception e) {
             LOG.warn("Exception occurred while processing notifications", e);
         }

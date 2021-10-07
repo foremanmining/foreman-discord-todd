@@ -128,7 +128,11 @@ public class NotificationsProcessorImpl<T>
 
             final Notifications.Notification lastNotification =
                     Iterables.getLast(notifications);
-            this.lastNotificationSetter.accept(session, lastNotification.id);
+            try {
+                this.lastNotificationSetter.accept(session, lastNotification.id);
+            } catch (final Exception e) {
+                LOG.warn("Exception occurred while sending", e);
+            }
             this.sessionRepository.save(session);
         }
     }
