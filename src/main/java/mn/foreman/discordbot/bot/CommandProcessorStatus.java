@@ -30,6 +30,9 @@ public class CommandProcessorStatus<T>
     /** Obtains the ID from the event. */
     private final Function<MessageReceivedEvent, String> idSupplier;
 
+    /** The max notifications to send at once. */
+    private final int maxNotifications;
+
     /** The repository for sessions. */
     private final MongoRepository<T, String> sessionRepository;
 
@@ -40,16 +43,19 @@ public class CommandProcessorStatus<T>
      * @param idSupplier          The ID supplier.
      * @param apiSupplier         The API supplier.
      * @param foremanDashboardUrl The dashboard URL.
+     * @param maxNotifications    The max notifications.
      */
     public CommandProcessorStatus(
             final MongoRepository<T, String> sessionRepository,
             final Function<MessageReceivedEvent, String> idSupplier,
             final BiFunction<T, String, ForemanApi> apiSupplier,
-            final String foremanDashboardUrl) {
+            final String foremanDashboardUrl,
+            final int maxNotifications) {
         this.sessionRepository = sessionRepository;
         this.idSupplier = idSupplier;
         this.apiSupplier = apiSupplier;
         this.foremanDashboardUrl = foremanDashboardUrl;
+        this.maxNotifications = maxNotifications;
     }
 
     @Override
@@ -143,11 +149,22 @@ public class CommandProcessorStatus<T>
             final List<Miners.Miner> miners) {
         final StringBuilder message =
                 new StringBuilder("**" + status + "**:\n");
-        for (int i = 0; i < miners.size(); i++) {
+
+        boolean truncated = false;
+        int minersLength = miners.size();
+        if (this.maxNotifications < minersLength) {
+            minersLength = this.maxNotifications;
+            truncated = true;
+        }
+
+        for (int i = 0; i < minersLength; i++) {
             final Miners.Miner miner = miners.get(i);
             message
                     .append(toMinerUrl(miner))
                     .append("\n");
+        }
+        if (truncated) {
+            message.append("**TRUNCATED**");
         }
         return message
                 .append("\n")

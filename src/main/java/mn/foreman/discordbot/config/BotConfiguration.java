@@ -161,7 +161,7 @@ public class BotConfiguration {
                                         sessionRepository,
                                         event -> event.getGuild().getId(),
                                         (session, event) -> {
-                                            session.setChannelId(event.getGuild().getId());
+                                            session.setChannelId(event.getChannel().getId());
                                             sessionRepository.save(session);
                                             return session;
                                         },
