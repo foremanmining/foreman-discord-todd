@@ -118,11 +118,13 @@ public class BotConfiguration {
     /**
      * Creates the command processors.
      *
-     * @param commandPrefix       The command prefix.
-     * @param foremanApiUrl       The Foreman API URL.
-     * @param foremanDashboardUrl The Foreman dashboard URL.
-     * @param sessionRepository   The session repository.
-     * @param objectMapper        The mapper.
+     * @param commandPrefix            The command prefix.
+     * @param foremanApiUrl            The Foreman API URL.
+     * @param foremanDashboardUrl      The Foreman dashboard URL.
+     * @param maxNotifications         The max notification length.
+     * @param sessionRepository        The session repository.
+     * @param privateSessionRepository The private session repository.
+     * @param objectMapper             The mapper.
      *
      * @return The processors.
      */
@@ -131,6 +133,7 @@ public class BotConfiguration {
             @Value("${bot.commandPrefix}") final String commandPrefix,
             @Value("${foreman.apiUrl}") final String foremanApiUrl,
             @Value("${foreman.dashboardUrl}") final String foremanDashboardUrl,
+            @Value("${notifications.max}") final int maxNotifications,
             final SessionRepository sessionRepository,
             final PrivateSessionRepository privateSessionRepository,
             final ObjectMapper objectMapper) {
@@ -239,7 +242,8 @@ public class BotConfiguration {
                                                                 session.getApiKey(),
                                                                 5,
                                                                 TimeUnit.SECONDS)),
-                                        foremanDashboardUrl),
+                                        foremanDashboardUrl,
+                                        maxNotifications),
                                 new CommandProcessorStatus<>(
                                         privateSessionRepository,
                                         event -> event.getAuthor().getId(),
@@ -253,7 +257,8 @@ public class BotConfiguration {
                                                                 session.getApiKey(),
                                                                 5,
                                                                 TimeUnit.SECONDS)),
-                                        foremanDashboardUrl)))
+                                        foremanDashboardUrl,
+                                        maxNotifications)))
                 .build();
     }
 
