@@ -181,7 +181,7 @@ public class CommandProcessorStatus<T>
     private String toMinerUrl(final Miners.Miner miner) {
         return String.format(
                 "[%s](%s/dashboard/miners/%d/details/)",
-                miner.name.replace(" - ,", ""),
+                miner.name,
                 this.foremanDashboardUrl,
                 miner.id);
     }
